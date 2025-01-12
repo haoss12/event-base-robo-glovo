@@ -18,16 +18,16 @@ class RobotSM(StateMachine):
     robot_return = wait_in_field.to(travel_to_base, after='robot_return')
     robot_returned = travel_to_base.to(wait_in_base, after='robot_returned')
 
-    robot_pick = wait_in_field.to(travel_to_restaurant, after='robot_pick')
+    robot_pick1 = wait_in_field.to(travel_to_restaurant, after='robot_pick1')
     robot_arrived = travel_to_restaurant.to(wait_in_restaurant, after='robot_arrived')
-    robot_pick = wait_in_restaurant.to(travel_to_restaurant, after='robot_pick')
-    robot_deliver = wait_in_restaurant.to(travel_to_client, after='robot_deliver')
+    robot_pick2 = wait_in_restaurant.to(travel_to_restaurant, after='robot_pick2')
+    robot_deliver1 = wait_in_restaurant.to(travel_to_client, after='robot_deliver1')
     food_delivered = travel_to_client.to(wait_in_client, after='food_delivered')
-    robot_deliver = wait_in_client.to(travel_to_client, after='robot_deliver')
+    robot_deliver2 = wait_in_client.to(travel_to_client, after='robot_deliver2')
     robot_empty = wait_in_client.to(wait_in_field, after='robot_empty')
 
     def on_enter_state(self, target, event):
-        print(f"Entering {target} from {event}")
+        print(f"robot: entering {target} from {event}")
 
 class Robot:
     id = 0
@@ -39,16 +39,31 @@ class Robot:
         Robot.id +=1
 
     def send(self, event):
+        #print(self.sm.current_state.name, event)
+
+        if event=='robot_pick' and self.sm.current_state.name=='Wait in field':
+            event = 'robot_pick1'
+
+        if event=='robot_pick' and self.sm.current_state.name=='Wait in restaurant':
+            event = 'robot_pick2'
+
+        if event=='robot_deliver' and self.sm.current_state.name=='Wait in restaurant':
+            event = 'robot_deliver1'
+
+        if event=='robot_deliver' and self.sm.current_state.name=='Wait in client':
+            event = 'robot_deliver2'
+
         try:
             self.sm.send(event)
         except:
+            #print('poraszka')
             pass
 
     def feed_event(self, event):
         if 'robot_number' in event:
-            if 'robot_number'==self.id:
+            if event['robot_number']==self.id:
                 self.send(event['id'])
-                #print(event)
+                #print(f'co jest {self.id} {event}')
 
 class OrderSM(StateMachine):
     initial = State(initial=True)
@@ -63,7 +78,7 @@ class OrderSM(StateMachine):
     food_delivered = wait_for_deliver.to(finished, after='food_delivered')
 
     def on_enter_state(self, target, event):
-        print(f"Entering {target} from {event}")
+        print(f'order: entering {target} from {event}')
 
 class Order:
     def __init__(self, supervisor, id, food, restaurant, address):
@@ -110,8 +125,7 @@ class Order:
 
                 available_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
 
-
-                print([robot.id for robot in available_robots])
+                #print([robot.id for robot in available_robots])
 
                 if len(available_robots)>0:
                     self.robot = available_robots[0] #TODO make better choice of robot
