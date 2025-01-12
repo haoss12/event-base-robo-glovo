@@ -38,10 +38,17 @@ class Robot:
         self.sm = RobotSM()
         Robot.id +=1
 
+    def send(self, event):
+        try:
+            self.sm.send(event)
+        except:
+            pass
+
     def feed_event(self, event):
         if 'robot_number' in event:
-            if event['robot_number']==self.id:
-                self.sm.send(event['id'])
+            if 'robot_number'==self.id:
+                self.send(event['id'])
+                #print(event)
 
 class OrderSM(StateMachine):
     initial = State(initial=True)
@@ -74,13 +81,6 @@ class Order:
             pass
 
     def feed_event(self, event):
-#        if 'order_number' in event:
-#            if event['order_number']==self.id:
-#                try:
-#                    self.sm.send(event['id'])
-#                except:
-#                    pass
-
         match event['id']:
             case 'food_start':
                 self.send(event['id'])
@@ -108,6 +108,29 @@ class Order:
                     'restaurant': self.restaurant,
                 })
 
+                available_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
+
+
+                print([robot.id for robot in available_robots])
+
+                if len(available_robots)>0:
+                    self.robot = available_robots[0] #TODO make better choice of robot
+                else:
+                    self.supervisor.transmit({
+                        'id': 'robot_spawn',
+                    })
+
+                    available_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
+
+                    self.robot = available_robots[0] #TODO make better choice of robot
+
+                self.supervisor.transmit({
+                    'id': 'robot_pick',
+                    'robot_number': self.robot.id,
+                    'food': self.food,
+                    'restaurant': self.restaurant,
+                })
+
     def is_finished(self):
         return self.sm.current_state.name=='Finished'
 
@@ -118,7 +141,14 @@ class Supervisor:
 
     def transmit(self, controllable_event):
         print(f'transmit {controllable_event}')
-        self.receive(controllable_event)
+
+        if controllable_event['id']=='robot_spawn':
+            robots_in_the_base = [robot for robot in self.robots if robot.sm.current_state.name=='Wait in base']
+
+            robot = robots_in_the_base[0]
+            robot.send('robot_spawn')
+        else:
+            self.receive(controllable_event)
 
     def receive(self, event):
         if event['id']=='new_order':
@@ -142,6 +172,14 @@ supervisor = Supervisor('localhost', 12345)
 supervisor.receive({
     'id': 'new_order',
     'order_number': 1,
+    'food': 5,
+    'restaurant': [1, 2],
+    'address': [4, 5],
+})
+
+supervisor.receive({
+    'id': 'new_order',
+    'order_number': 2,
     'food': 5,
     'restaurant': [1, 2],
     'address': [4, 5],
