@@ -12,7 +12,7 @@ class Communication:
         self.client_socket, self.addr = self.socket.accept()
         self.client_socket.setblocking(0)
 
-    def send_dict(self, data_):
+    def send_data(self, data_):
         try:
             data_to_send = json.dumps(data_)
             self.client_socket.sendall(data_to_send.encode("utf-8"))
@@ -32,7 +32,7 @@ class Communication:
             return {}
 
     def run(self, events_to_send):
-        self.send_dict(events_to_send)
+        self.send_data(events_to_send)
         return self.receive_dict()
 
     def close(self):
@@ -47,7 +47,7 @@ if __name__ == "__main__":
             data = simulation.receive_dict()
             if data:
                 print("Received from supervisor:", data)
-                simulation.send_dict({"test 0": "test 123"})
+                simulation.send_data({"test 0": "test 123"})
     except KeyboardInterrupt:
         print("Shutting down Simulation.")
     finally:
