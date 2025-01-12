@@ -1,0 +1,9 @@
+{
+    "max_robots": 3,
+    "backpack_capacity": 5,
+    "restaurant_count": 5,
+    "city_size": [
+        10,
+        10
+    ]
+}
