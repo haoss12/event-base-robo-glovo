@@ -5,6 +5,7 @@ import communication
 import simulation
 import time
 import random
+from typing import List
 
 
 # -------------------------------
@@ -110,13 +111,13 @@ def main():
     running = True
 
 
-    events_to_send = {}
+    events_to_send: List[dict] = []  # NOTE Szpak: it should a list of events to send, each event is a dict
     nwm: any = None
-    communication_class = communication.Magic()
+    communication_class = communication.Communication("localhost", 12345)
     simulation_class = simulation.CustomClass()
 
     while running:
-        received_events = communication_class.run(events_to_send)
+        received_events: List[dict] = communication_class.run(events_to_send)
         idk = simulation_class.run(nwm)
 
 
