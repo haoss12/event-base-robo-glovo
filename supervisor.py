@@ -39,8 +39,6 @@ class Robot:
         Robot.id +=1
 
     def send(self, event):
-        #print(self.sm.current_state.name, event)
-
         if event=='robot_pick' and self.sm.current_state.name=='Wait in field':
             event = 'robot_pick1'
 
@@ -56,14 +54,33 @@ class Robot:
         try:
             self.sm.send(event)
         except:
-            #print('poraszka')
             pass
 
     def feed_event(self, event):
         if 'robot_number' in event:
             if event['robot_number']==self.id:
                 self.send(event['id'])
-                #print(f'co jest {self.id} {event}')
+
+                match event['id']:
+                    case 'robot_arrived':
+                        orders = [order for order in self.supervisor.orders if order.robot.id==self.id]
+
+                        #TODO consider all orders for this robot
+                        order = orders[0]
+                        if order.sm.current_state.name=='Wait for deliver':
+                            self.supervisor.transmit({
+                                'id': 'robot_deliver',
+                                'robot_number': self.id,
+                                'food': order.food,
+                                'address': order.address,
+                            })
+        else:
+            match event['id']:
+                case 'food_delivered':
+                    orders = [order for order in self.supervisor.orders if order.robot.id==self.id]
+
+                    if(len(orders)>0):
+                        self.send('food_delivered')
 
 class OrderSM(StateMachine):
     initial = State(initial=True)
@@ -111,6 +128,14 @@ class Order:
             case 'food_ready':
                 if event['order_number']==self.id:
                     self.send(event['id'])
+
+                if self.robot.sm.current_state.name=='Wait in restaurant':
+                    self.supervisor.transmit({
+                        'id': 'robot_deliver',
+                        'robot_number': self.robot.id,
+                        'food': self.food,
+                        'address': self.address,
+                    })
             case 'food_picked':
                 if event['order_number']==self.id:
                     self.send(event['id'])
@@ -124,8 +149,6 @@ class Order:
                 })
 
                 available_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
-
-                #print([robot.id for robot in available_robots])
 
                 if len(available_robots)>0:
                     self.robot = available_robots[0] #TODO make better choice of robot
@@ -154,6 +177,7 @@ class Supervisor:
         self.orders = []
 
     def transmit(self, controllable_event):
+        #TODO use Szpak's websocket implementation here
         print(f'transmit {controllable_event}')
 
         if controllable_event['id']=='robot_spawn':
@@ -192,11 +216,9 @@ supervisor.receive({
 })
 
 supervisor.receive({
-    'id': 'new_order',
-    'order_number': 2,
-    'food': 5,
+    'id': 'robot_arrived',
+    'robot_number': 0,
     'restaurant': [1, 2],
-    'address': [4, 5],
 })
 
 supervisor.receive({
@@ -216,14 +238,10 @@ supervisor.receive({
 supervisor.receive({
     'id': 'food_delivered',
     'order_number': 1,
-    'food': 5,
-    'restaurant': [1, 2],
     'address': [4, 5],
 })
 
-print(len(supervisor.orders))
-
-#while True:
-#    supervisor.send_dict({"message": 'Hello Simulation'})
-#    received_data = supervisor.receive_dict()
-#    time.sleep(1)
+supervisor.receive({
+    'id': 'robot_empty',
+    'robot_number': 0,
+})
