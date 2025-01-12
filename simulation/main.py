@@ -112,7 +112,7 @@ def main():
 
     events_to_send = {}
     nwm: any = None
-    communication_class = communication.Magic()
+    communication_class = communication.Communication("localhost", 12345)
     simulation_class = simulation.CustomClass()
 
     while running:
