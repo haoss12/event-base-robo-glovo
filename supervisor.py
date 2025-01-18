@@ -177,6 +177,7 @@ class Order:
             case 'Initial':
                 self.supervisor.transmit({
                     'id': 'food_start',
+                    'order_number': self.id,
                     'food': self.food,
                     'restaurant': self.restaurant,
                 })
@@ -203,6 +204,7 @@ class Order:
                     self.supervisor.transmit({
                         'id': 'robot_pick',
                         'robot_number': self.robot.id,
+                        'order_number': self.id,
                         'food': self.food,
                         'restaurant': self.restaurant,
                     })
