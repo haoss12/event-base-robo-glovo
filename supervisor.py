@@ -148,25 +148,28 @@ class Order:
                     'restaurant': self.restaurant,
                 })
 
-                available_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
+                waiting_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field' or robot.sm.current_state.name=='Wait in base']
 
-                if len(available_robots)>0:
-                    self.robot = available_robots[0] #TODO make better choice of robot
-                else:
-                    self.supervisor.transmit({
-                        'id': 'robot_spawn',
-                    })
-
+                if len(waiting_robots)>0:
                     available_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
 
-                    self.robot = available_robots[0] #TODO make better choice of robot
+                    if len(available_robots)>0:
+                        self.robot = available_robots[0] #TODO make better choice of robot
+                    else:
+                        self.supervisor.transmit({
+                            'id': 'robot_spawn',
+                        })
 
-                self.supervisor.transmit({
-                    'id': 'robot_pick',
-                    'robot_number': self.robot.id,
-                    'food': self.food,
-                    'restaurant': self.restaurant,
-                })
+                        available_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
+
+                        self.robot = available_robots[0] #TODO make better choice of robot
+
+                    self.supervisor.transmit({
+                        'id': 'robot_pick',
+                        'robot_number': self.robot.id,
+                        'food': self.food,
+                        'restaurant': self.restaurant,
+                    })
 
     def is_finished(self):
         return self.sm.current_state.name=='Finished'
@@ -246,8 +249,13 @@ class Communication:
 
 class Supervisor:
     def __init__(self, host, port):
+        with open("simulation/config.json", 'r', encoding='utf-8') as f:
+            config = json.load(f)
+
+        max_robots = config["max_robots"]
+
         self.communication = Communication(host, port)
-        self.robots = [Robot(self) for _ in range(3)]
+        self.robots = [Robot(self) for _ in range(max_robots)]
         self.orders = []
 
     def transmit(self, controllable_event):
@@ -287,7 +295,8 @@ if __name__ == "__main__":
             received_data = supervisor.communication.receive_dict()
             if received_data:
                 #print(f'rx {received_data}')
-                supervisor.receive(received_data)
+                for msg in received_data:
+                    supervisor.receive(msg)
     except KeyboardInterrupt:
         print("Shutting down Supervisor.")
     finally:
