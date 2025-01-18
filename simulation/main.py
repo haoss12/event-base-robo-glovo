@@ -448,7 +448,7 @@ def main():
             # Dostosuj adres do drogi
             # address_x, address_y = adjust_to_road(address_x, address_y, road_spacing)
 
-            rest_x, rest_y = random.choice(restaurants)
+            rest_x, rest_y = random.choice(restaurants_positions)
             # rest_x, rest_y = adjust_to_road(rest_x, rest_y, road_spacing)
 
             food = {"size": random.randint(1, 3)}
