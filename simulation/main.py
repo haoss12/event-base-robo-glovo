@@ -183,7 +183,9 @@ class EventQueue:
             event_id = event.get("id", "")
 
             if event_id == EventType.NEW_ORDER:
-                # NOTE Szpak: Should we even consider processing new order in the simulation?
+                messages_to_send.append(
+                    event
+                )
                 print(f"[EVENT] New order: {event}")
 
             elif event_id == EventType.SPAWN_COURIER:
