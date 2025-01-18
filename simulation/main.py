@@ -64,7 +64,7 @@ class Robot:
 
         # Generate event: Food picked up
         self.event_queue.enqueue({
-            "id": EventType.FOOD_PICKED_UP,
+            "id": EventType.FOOD_PICKED_UP.value,
             "order_number": "TODO",
             "food": food_id,
             "restaurant": [self.target_x, self.target_y],
@@ -77,7 +77,7 @@ class Robot:
         del self.carrying_food[food_id]
 
         self.event_queue.enqueue({
-            "id": EventType.BACKPACK_EMPTIED,
+            "id": EventType.BACKPACK_EMPTIED.value,
             "order_number": "dupa",
             "address": [self.target_x, self.target_y],
         })
@@ -85,7 +85,7 @@ class Robot:
         # Generate event: Backpack emptied
         if self.current_capacity == 0:
             self.event_queue.enqueue({
-                "id": EventType.BACKPACK_EMPTIED,
+                "id": EventType.BACKPACK_EMPTIED.value,
                 "robot_number": self.robot_id
             })
 
@@ -111,7 +111,7 @@ class Robot:
             # Low battery warning
             if self.current_baterry_range <= 0.1 * self.battery_range:
                 self.event_queue.enqueue({
-                    "id": EventType.LOW_BATTERY_WARNING,
+                    "id": EventType.LOW_BATTERY_WARNING.value,
                     "robot_id": self.robot_id
                 })
 
@@ -120,19 +120,19 @@ class Robot:
                 # Generate event: Arrived at destination
                 if self.curent_objective == Objective.PICKING_UP:
                     self.event_queue.enqueue({
-                        "id": EventType.ARRIVED_AT_RESTAURANT,
+                        "id": EventType.ARRIVED_AT_RESTAURANT.value,
                         "robot_id": self.robot_id,
                         "restaurant_xy": [self.target_x, self.target_y]
                     })
                 elif self.curent_objective == Objective.GOING_WITH_ORDER:
                     self.event_queue.enqueue({
-                        "id": EventType.FOOD_DELIVERED,
+                        "id": EventType.FOOD_DELIVERED.value,
                         "order_number": 1,
                         "address_xy": [self.target_x, self.target_y],
                     })
                 elif self.target_x == 0 and self.target_y == 0 and self.curent_objective == Objective.RETURNING_TO_BASE:
                     self.event_queue.enqueue({
-                        "id": EventType.ARRIVED_AT_BASE,
+                        "id": EventType.ARRIVED_AT_BASE.value,
                         "robot_id": self.robot_id,
                     })
 
@@ -144,7 +144,7 @@ class Robot:
         # Battery depleted
         if self.current_baterry_range <= 0:
             self.event_queue.enqueue({
-                "id": EventType.BATTERY_DEPLETED,
+                "id": EventType.BATTERY_DEPLETED.value,
                 "robot_id": self.robot_id
             })
 
@@ -182,13 +182,13 @@ class EventQueue:
             event = self.dequeue()
             event_id = event.get("id", "")
 
-            if event_id == EventType.NEW_ORDER:
+            if event_id == EventType.NEW_ORDER.value:
                 messages_to_send.append(
                     event
                 )
                 print(f"[EVENT] New order: {event}")
 
-            elif event_id == EventType.SPAWN_COURIER:
+            elif event_id == EventType.SPAWN_COURIER.value:
                 if len(robots) < max_robots:
                     r = Robot(next_robot_id, 0, 0, event.get(
                         "battery_range", 10), backpack_capacity, self)
@@ -199,14 +199,14 @@ class EventQueue:
                     print("[EVENT] Maximum number of robots reached.")
                     # TODO: raise it to the supervisor
 
-            elif event_id == EventType.RETURN_TO_BASE:
+            elif event_id == EventType.RETURN_TO_BASE.value:
                 robot_id = event["robot_id"]
                 for r in robots:
                     if r.robot_id == robot_id:
                         r.set_target(0, 0, Objective.RETURNING_TO_BASE)
                         print(f"[EVENT] Robot {robot_id} returning to base.")
 
-            elif event_id == EventType.ARRIVED_AT_BASE:
+            elif event_id == EventType.ARRIVED_AT_BASE.value:
                 # NOTE Szpak: Supervisor currently does not use this event
                 messages_to_send.append(
                     event
@@ -214,7 +214,7 @@ class EventQueue:
                 robot_id = event["robot_id"]
                 print(f"[EVENT] Robot {robot_id} arrived at base.")
 
-            elif event_id == EventType.LOW_BATTERY_WARNING:
+            elif event_id == EventType.LOW_BATTERY_WARNING.value:
                 # NOTE Szpak: Supervisor currently does not use this event
                 messages_to_send.append(
                     event
@@ -222,7 +222,7 @@ class EventQueue:
                 robot_id = event["robot_id"]
                 print(f"[EVENT] Warning: Robot {robot_id} has low battery.")
 
-            elif event_id == EventType.BATTERY_DEPLETED:
+            elif event_id == EventType.BATTERY_DEPLETED.value:
                 # NOTE Szpak: Supervisor currently does not use this event
                 robot_id = event["robot_id"]
                 messages_to_send.append(
@@ -233,7 +233,7 @@ class EventQueue:
                 robots = [r for r in robots if r.robot_id != robot_id]
                 # TODO: handle situation when robot is handling order
 
-            elif event_id == EventType.ARRIVED_AT_RESTAURANT:
+            elif event_id == EventType.ARRIVED_AT_RESTAURANT.value:
                 messages_to_send.append(
                     event
                 )
@@ -242,7 +242,7 @@ class EventQueue:
                 print(
                     f"[EVENT] Robot {robot_id} arrived at restaurant {restaurant_xy}.")
 
-            elif event_id == EventType.FOOD_PICKED_UP:
+            elif event_id == EventType.FOOD_PICKED_UP.value:
                 messages_to_send.append(
                     event
                 )
@@ -252,14 +252,14 @@ class EventQueue:
                 print(
                     f"[EVENT] Robot {robot_id} picked up food from restaurant {restaurant_xy}. Food: {food_details}")
 
-            elif event_id == EventType.FOOD_READY:
+            elif event_id == EventType.FOOD_READY.value:
                 # TODO: Simulating restaurants
                 restaurant_xy = event["restaurant_xy"]
                 food_details = event["food"]
                 print(
                     f"[EVENT] Food ready for pickup at restaurant {restaurant_xy}. Food: {food_details}")
 
-            elif event_id == EventType.DELIVER_FOOD:
+            elif event_id == EventType.DELIVER_FOOD.value:
                 robot_id = event["robot_number"]
                 address_xy = event["address"]
                 food_details = event["food"]
@@ -271,7 +271,7 @@ class EventQueue:
                         print(
                             f"[EVENT] Robot {robot_id} delivering food to {address_xy}. Food: {food_details}")
 
-            elif event_id == EventType.FOOD_DELIVERED:
+            elif event_id == EventType.FOOD_DELIVERED.value:
                 messages_to_send.append(
                     event
                 )
@@ -281,14 +281,14 @@ class EventQueue:
                 print(
                     f"[EVENT] Robot {robot_id} delivered food to {address_xy}. Food: {food_details}")
 
-            elif event_id == EventType.BACKPACK_EMPTIED:
+            elif event_id == EventType.BACKPACK_EMPTIED.value:
                 messages_to_send.append(
                     event
                 )
                 robot_id = event["robot_id"]
                 print(f"[EVENT] Robot {robot_id}'s backpack has been emptied.")
 
-            elif event_id == EventType.ORDER_FOOD_PREPARATION:
+            elif event_id == EventType.ORDER_FOOD_PREPARATION.value:
                 # TODO
                 restaurant_xy = event["restaurant_xy"]
                 food_details = event["food"]
@@ -399,7 +399,7 @@ def main():
 
             food = {"size": random.randint(1, 3)}
             event_queue.enqueue({
-                "id": EventType.NEW_ORDER,
+                "id": EventType.NEW_ORDER.value,
                 "order_number": order_number,
                 "food": food,
                 "address": [address_x, address_y],
