@@ -175,15 +175,15 @@ class Order:
                 if event['order_number']==self.id:
                     self.send(event['id'])
 
-                if self.robot.sm.current_state.name=='Wait in restaurant':
-                    print("----------------- Potezny DUPA PRINT ----------------")
-                    self.supervisor.transmit({
-                        'id': 'robot_deliver',
-                        'robot_number': self.robot.id,
-                        'food': self.food,
-                        'address': self.address,
-                        'order_number': self.id,
-                    })
+                if self.robot:
+                    if self.robot.sm.current_state.name=='Wait in restaurant':
+                        self.supervisor.transmit({
+                            'id': 'robot_deliver',
+                            'robot_number': self.robot.id,
+                            'food': self.food,
+                            'address': self.address,
+                            'order_number': self.id,
+                        })
             case 'food_picked':
                 if event['order_number']==self.id:
                     self.send(event['id'])
