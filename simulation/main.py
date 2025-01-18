@@ -363,6 +363,7 @@ class EventQueue:
                         # TODO: Food information is not stored anywhere
                         r.set_target(
                             address[0], address[1], Objective.GOING_WITH_ORDER)
+                        r.add_delivery(address, )
                         print(
                             f"[EVENT] Robot {robot_id} delivering food to {address}. Food: {food_details}")
 

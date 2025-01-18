@@ -93,6 +93,7 @@ class Robot:
                                 'robot_number': self.id,
                                 'food': order.food,
                                 'address': order.address,
+                                'order_number': order.id,
                             })
 
                 match self.sm.current_state.name:
@@ -169,6 +170,7 @@ class Order:
                         'robot_number': self.robot.id,
                         'food': self.food,
                         'address': self.address,
+                        'order_number': self.id,
                     })
             case 'food_picked':
                 if event['order_number']==self.id:
@@ -178,6 +180,7 @@ class Order:
                         'robot_number': self.robot.id,
                         'food': self.food,
                         'address': self.address,
+                        'order_number': self.id,
                     })
 
         match self.sm.current_state.name:
