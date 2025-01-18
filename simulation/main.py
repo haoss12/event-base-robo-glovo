@@ -25,6 +25,7 @@ class EventType(Enum):
     LOW_BATTERY_WARNING = "low_battery_warning"
     BATTERY_DEPLETED = "battery_depleted"
     ARRIVED_AT_RESTAURANT = "robot_arrived"
+    ROBOT_PICK_FOOD = "robot_pick"
     FOOD_PICKED_UP = "food_picked"
     FOOD_READY = "food_ready"
     DELIVER_FOOD = "deliver_food"
@@ -48,6 +49,7 @@ class Robot:
         self.curent_objective = Objective.IDLE
         self.carrying_food = dict()  # Tu można trzymać informacje o jedzeniu
         self.event_queue: EventQueue = event_queue  # Reference to the event queue
+        self.order_number: int = -1
 
     def set_target(self, tx, ty, type: Objective):
         self.target_x = tx
@@ -63,12 +65,14 @@ class Robot:
         self.carrying_food[food_id] = food_capacity
 
         # Generate event: Food picked up
-        self.event_queue.enqueue({
-            "id": EventType.FOOD_PICKED_UP.value,
-            "order_number": "TODO",
-            "food": food_id,
-            "restaurant": [self.target_x, self.target_y],
-        })
+        # TODO: here should be event to send to the restaurant, robot should get order number from the restaurant
+        # self.order_number = ...
+        # self.event_queue.enqueue({
+        #     "id": EventType.FOOD_PICKED_UP.value,
+        #     "order_number": "TODO",
+        #     "food": food_id,
+        #     "restaurant": [self.target_x, self.target_y],
+        # })
 
     def give_food(self, food_id):
         """Remove food from backpack, simulating giving order to customer"""
@@ -77,8 +81,8 @@ class Robot:
         del self.carrying_food[food_id]
 
         self.event_queue.enqueue({
-            "id": EventType.BACKPACK_EMPTIED.value,
-            "order_number": "dupa",
+            "id": EventType.FOOD_DELIVERED.value,
+            "order_number": self.order_number,
             "address": [self.target_x, self.target_y],
         })
 
@@ -241,6 +245,18 @@ class EventQueue:
                 restaurant_xy = event["restaurant_xy"]
                 print(
                     f"[EVENT] Robot {robot_id} arrived at restaurant {restaurant_xy}.")
+
+            elif event_id == EventType.ROBOT_PICK_FOOD.value:
+                robot_id = event["robot_number"]
+                food = event["food"]
+                restaurant = event["restaurant"]
+
+                for r in robots:
+                    if r.robot_id == robot_id:
+                        r.pickup_food()
+                        print(f"[EVENT] Robot {robot_id} picking up food.")
+
+                print(f"[EVENT] Robot pick, robot_id = {robot_id}, food = {food}, restaurant = {restaurant}")
 
             elif event_id == EventType.FOOD_PICKED_UP.value:
                 messages_to_send.append(
