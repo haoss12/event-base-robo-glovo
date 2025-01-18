@@ -109,7 +109,7 @@ class Robot:
             if destination != address:
                 continue
 
-            removed_capacity = self.deliveries["food"]["size"]
+            removed_capacity = delivery_parameters["food"]["size"]
             self.current_capacity -= removed_capacity
             delivery_to_remove_from_dict = order_number
 
@@ -358,12 +358,13 @@ class EventQueue:
                 robot_id = event["robot_number"]
                 address = event["address"]
                 food_details = event["food"]
+                order_number = event["order_number"]
                 for r in robots:
                     if r.robot_id == robot_id:
                         # TODO: Food information is not stored anywhere
                         r.set_target(
                             address[0], address[1], Objective.GOING_WITH_ORDER)
-                        r.add_delivery(address, )
+                        r.add_delivery(address, order_number, food_details)
                         print(
                             f"[EVENT] Robot {robot_id} delivering food to {address}. Food: {food_details}")
 
@@ -371,17 +372,16 @@ class EventQueue:
                 messages_to_send.append(
                     event
                 )
-                robot_id = event["robot_id"]
-                address_xy = event["address_xy"]
-                food_details = event["food"]
+                order_number = event["order_number"]
+                address = event["address"]
                 print(
-                    f"[EVENT] Robot {robot_id} delivered food to {address_xy}. Food: {food_details}")
+                    f"[EVENT] Robot {order_number} delivered food to {address}")
 
             elif event_id == EventType.BACKPACK_EMPTIED.value:
                 messages_to_send.append(
                     event
                 )
-                robot_id = event["robot_id"]
+                robot_id = event["robot_number"]
                 print(f"[EVENT] Robot {robot_id}'s backpack has been emptied.")
 
             elif event_id == EventType.FOOD_START.value:
