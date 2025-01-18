@@ -4,6 +4,7 @@ import time
 import select
 import sys
 from statemachine import StateMachine, State
+import numpy as np
 
 class RobotSM(StateMachine):
     wait_in_field = State()
@@ -13,7 +14,7 @@ class RobotSM(StateMachine):
     wait_in_client = State()
     travel_to_base = State()
     wait_in_base = State(initial=True)
-    dead = State()
+    dead = State(final=True)
 
     robot_spawn = wait_in_base.to(wait_in_field, after='robot_spawn')
     robot_return = wait_in_field.to(travel_to_base, after='robot_return')
@@ -43,6 +44,7 @@ class Robot:
         self.sm = RobotSM()
         Robot.id +=1
         self.battery_low = False
+        self.position = [0, 0]
 
     def send(self, event):
         if event=='robot_pick' and self.sm.current_state.name=='Wait in field':
@@ -77,8 +79,6 @@ class Robot:
                 self.send(event['id'])
 
                 match event['id']:
-                    case 'robot_spawn':
-                        self.battery_low = False
                     case 'battery_low':
                         self.battery_low = True
                     case 'robot_arrived':
@@ -87,6 +87,7 @@ class Robot:
                         #TODO consider all orders for this robot
                         order = orders[0]
                         if order.sm.current_state.name=='Wait for deliver':
+                            self.position = order.address
                             self.supervisor.transmit({
                                 'id': 'robot_deliver',
                                 'robot_number': self.id,
@@ -95,8 +96,12 @@ class Robot:
                             })
 
                 match self.sm.current_state.name:
+                    case 'Wait in base':
+                        self.battery_low = False
+                        self.position = [0, 0]
                     case 'Wait in field':
                         if self.battery_low:
+                            self.position = [0, 0]
                             self.supervisor.transmit({
                                 'id': 'robot_return',
                                 'robot_number': self.id,
@@ -179,19 +184,22 @@ class Order:
                 waiting_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field' or robot.sm.current_state.name=='Wait in base']
 
                 if len(waiting_robots)>0:
-                    available_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
+                    field_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
 
-                    if len(available_robots)>0:
-                        self.robot = available_robots[0] #TODO make better choice of robot
-                    else:
+                    if len(field_robots)==0:
                         self.supervisor.transmit({
                             'id': 'robot_spawn',
                         })
+                        field_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
 
-                        available_robots = [robot for robot in self.supervisor.robots if robot.sm.current_state.name=='Wait in field']
+                    min_dist = 1000000
+                    for robot in field_robots:
+                        dist = np.abs(robot.position[0] - self.restaurant[0]) + np.abs(robot.position[1] - self.restaurant[1])
+                        if dist<min_dist:
+                            self.robot = robot
+                            min_dist = dist
 
-                        self.robot = available_robots[0] #TODO make better choice of robot
-
+                    self.robot.position = self.restaurant
                     self.supervisor.transmit({
                         'id': 'robot_pick',
                         'robot_number': self.robot.id,
