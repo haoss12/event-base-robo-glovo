@@ -13,6 +13,7 @@ class RobotSM(StateMachine):
     wait_in_client = State()
     travel_to_base = State()
     wait_in_base = State(initial=True)
+    dead = State()
 
     robot_spawn = wait_in_base.to(wait_in_field, after='robot_spawn')
     robot_return = wait_in_field.to(travel_to_base, after='robot_return')
@@ -26,6 +27,10 @@ class RobotSM(StateMachine):
     robot_deliver2 = wait_in_client.to(travel_to_client, after='robot_deliver2')
     robot_empty = wait_in_client.to(wait_in_field, after='robot_empty')
 
+    battery_dead1 = travel_to_restaurant.to(dead, after='battery_dead1')
+    battery_dead2 = travel_to_client.to(dead, after='battery_dead2')
+    battery_dead3 = travel_to_base.to(dead, after='battery_dead3')
+
     def on_enter_state(self, target, event):
         print(f"robot: entering {target} from {event}")
 
@@ -37,6 +42,7 @@ class Robot:
         self.supervisor = supervisor
         self.sm = RobotSM()
         Robot.id +=1
+        self.battery_low = False
 
     def send(self, event):
         if event=='robot_pick' and self.sm.current_state.name=='Wait in field':
@@ -51,6 +57,15 @@ class Robot:
         if event=='robot_deliver' and self.sm.current_state.name=='Wait in client':
             event = 'robot_deliver2'
 
+        if event=='battery_dead' and self.sm.current_state.name=='Travel to restaurant':
+            event = 'battery_dead1'
+
+        if event=='battery_dead' and self.sm.current_state.name=='Travel to client':
+            event = 'battery_dead2'
+
+        if event=='battery_dead' and self.sm.current_state.name=='Travel to base':
+            event = 'battery_dead3'
+
         try:
             self.sm.send(event)
         except:
@@ -62,6 +77,10 @@ class Robot:
                 self.send(event['id'])
 
                 match event['id']:
+                    case 'robot_spawn':
+                        self.battery_low = False
+                    case 'battery_low':
+                        self.battery_low = True
                     case 'robot_arrived':
                         orders = [order for order in self.supervisor.orders if order.robot.id==self.id]
 
@@ -74,6 +93,15 @@ class Robot:
                                 'food': order.food,
                                 'address': order.address,
                             })
+
+                match self.sm.current_state.name:
+                    case 'Wait in field':
+                        if self.battery_low:
+                            self.supervisor.transmit({
+                                'id': 'robot_return',
+                                'robot_number': self.id,
+                            })
+
         else:
             match event['id']:
                 case 'food_delivered':
