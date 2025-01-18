@@ -334,7 +334,7 @@ class Supervisor:
         self.orders = [order for order in self.orders if not order.is_finished()]
 
 if __name__ == "__main__":
-    supervisor = Supervisor('localhost', 12345)
+    supervisor = Supervisor('localhost', int(sys.argv[1]))
     try:
         while True:
             received_data = supervisor.communication.receive_dict()

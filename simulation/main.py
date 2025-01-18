@@ -1,6 +1,7 @@
 import json
 import os
 import random
+import sys
 from collections import deque
 from enum import Enum
 
@@ -13,8 +14,9 @@ from render import Renderer
 class Objective(Enum):
     IDLE = 0
     PICKING_UP = 1
-    GOING_WITH_ORDER = 2
-    RETURNING_TO_BASE = 3
+    WAITING_FOR_FOOD_TO_BE_READY = 2
+    GOING_WITH_ORDER = 3
+    RETURNING_TO_BASE = 4
 
 # Event Types
 
@@ -52,6 +54,8 @@ class Robot:
         self.carrying_food = dict()  # Tu można trzymać informacje o jedzeniu
         self.event_queue: EventQueue = event_queue  # Reference to the event queue
         self.orders = {}
+        self.deliveries = {}
+        self.restaurant_at_which_robot_waits = []
         self.road_spacing = road_spacing
 
     def set_target(self, tx, ty, type: Objective):
@@ -61,6 +65,9 @@ class Robot:
 
     def add_order(self, restaurant, order_number, food):
         self.orders[order_number] = {"restaurant": restaurant, "ready_flag": False, "food": food}
+
+    def add_delivery(self, address, order_number, food):
+        self.deliveries[order_number] = {"address": address, "food": food}
 
     def set_order_ready(self, order_number):
         self.orders[order_number]["ready_flag"] = True
@@ -73,28 +80,26 @@ class Robot:
                 continue
 
             if order_param["ready_flag"]:
-                food_capacity = order_param["food"]
+                food_capacity = order_param["food"]["size"]
                 if (self.current_capacity + food_capacity) > self.backpack_capacity:
                     raise Exception(
                         f"Supervisor exceeded max capacity for robot #{self.robot_id}")
                 self.current_capacity += food_capacity
-                self.carrying_food[restaurant] = food_capacity
+                self.carrying_food[order_number] = order_param["food"]
                 self.event_queue.enqueue({
                     "id": EventType.FOOD_PICKED_UP.value,
                     "order_number": order_number,
-                    "food": food_capacity,
+                    "food": order_param["food"],
                     "restaurant": restaurant,
                 })
+                self.current_objective = Objective.IDLE
+                self.restaurant_at_which_robot_waits = []
 
             else:
-                self.event_queue.enqueue({
-                    "id": EventType.ARRIVED_AT_RESTAURANT.value,
-                    "robot_number": self.robot_id,
-                    "restaurant": restaurant,
-                    "repetition_flag": True,
-                })
+                self.current_objective = Objective.WAITING_FOR_FOOD_TO_BE_READY
+                self.restaurant_at_which_robot_waits = restaurant
 
-    def give_food(self, food_id):
+    def give_food(self, address, food_id):
         """Remove food from backpack, simulating giving order to customer"""
         removed_capacity = self.carrying_food[food_id]
         self.current_capacity -= removed_capacity
@@ -104,6 +109,11 @@ class Robot:
             "id": EventType.FOOD_DELIVERED.value,
             "order_number": self.order_number,
             "address": [self.target_x, self.target_y],
+        })
+        self.event_queue.enqueue({
+            "id": EventType.FOOD_DELIVERED.value,
+            "order_number": 1,
+            "address_xy": [self.target_x, self.target_y],
         })
 
         # Generate event: Backpack emptied
@@ -127,6 +137,9 @@ class Robot:
         - If a target is set, we move towards the target along the X-axis first, then along the Y-axis (or vice versa).
         - No obstacle avoidance.
         """
+        if self.current_objective == Objective.WAITING_FOR_FOOD_TO_BE_READY:
+            self.pickup_food(self.restaurant_at_which_robot_waits)
+
         if self.target_x is not None and self.target_y is not None:
             if self.y < self.target_y:
                 self.y += 1
@@ -158,14 +171,9 @@ class Robot:
                         "id": EventType.ARRIVED_AT_RESTAURANT.value,
                         "robot_number": self.robot_id,
                         "restaurant": [self.target_x, self.target_y],
-                        "repetition_flag": False,
                     })
                 elif self.current_objective == Objective.GOING_WITH_ORDER:
-                    self.event_queue.enqueue({
-                        "id": EventType.FOOD_DELIVERED.value,
-                        "order_number": 1,
-                        "address_xy": [self.target_x, self.target_y],
-                    })
+                    self.give_food()
                 elif self.target_x == 0 and self.target_y == 0 and self.current_objective == Objective.RETURNING_TO_BASE:
                     self.event_queue.enqueue({
                         "id": EventType.ARRIVED_AT_BASE.value,
@@ -208,6 +216,7 @@ class Restaurant:
                     "id": EventType.FOOD_READY.value,
                     "order_number": order_number,
                     "restaurant": self.restaurant,
+                    "food": order_details[0],
                 })
 
 
@@ -218,7 +227,7 @@ class EventQueue:
 
     def enqueue(self, event_dict: dict):
         self.queue.append(event_dict)
-        print(f"Added new event of type: {event_dict}")
+        print(f"Enqueuing event: {event_dict}")
 
     def dequeue(self):
         return self.queue.popleft() if self.queue else None
@@ -226,19 +235,7 @@ class EventQueue:
     def is_empty(self):
         return len(self.queue) == 0
 
-    def process_events(self, robots: list[Robot], max_robots, backpack_capacity, next_robot_id, communication: Communication, road_spacing):
-        """
-        Processes all events in the queue and executes their corresponding logic.
-
-        Args:
-            robots (list): List of active robots.
-            max_robots (int): Maximum allowed robots in the simulation.
-            backpack_capacity (int): Default backpack capacity for new robots.
-            next_robot_id (int): ID to assign to the next spawned robot.
-
-        Returns:
-            int: Updated next_robot_id value.
-        """
+    def process_events(self, robots: list[Robot], restaurants, max_robots, backpack_capacity, next_robot_id, communication: Communication, road_spacing):
         messages_to_send = []
 
         payload = communication.receive_dict()
@@ -302,15 +299,13 @@ class EventQueue:
                 # TODO: handle situation when robot is handling order
 
             elif event_id == EventType.ARRIVED_AT_RESTAURANT.value:
-                robot_id = event["robot_id"]
+                robot_id = event["robot_number"]
                 restaurant = event["restaurant"]
-                if not event["repetition_flag"]:
-                    del event["repetition_flag"]
-                    messages_to_send.append(
-                        event
-                    )
-                    print(
-                        f"[EVENT] Robot {robot_id} arrived at restaurant {restaurant}.")
+                messages_to_send.append(
+                    event
+                )
+                print(
+                    f"[EVENT] Robot {robot_id} arrived at restaurant {restaurant}.")
                 for r in robots:
                     if r.robot_id == robot_id:
                         r.pickup_food(restaurant)
@@ -327,22 +322,24 @@ class EventQueue:
                         r.set_target(
                             restaurant[0], restaurant[1], Objective.PICKING_UP)
                         r.add_order(restaurant, order_number, food)
-                        print(f"[EVENT] Robot {robot_id} picking up food.")
 
                 print(
-                    f"[EVENT] Robot pick, robot_id = {robot_id}, food = {food}, restaurant = {restaurant}")
+                    f"[EVENT] Send robot to pick order from restaurant, robot_id = {robot_id}, food = {food}, restaurant = {restaurant}")
 
             elif event_id == EventType.FOOD_PICKED_UP.value:
                 messages_to_send.append(
                     event
                 )
-                robot_id = event["robot_id"]
-                restaurant_xy = event["restaurant_xy"]
+                order_number = event["order_number"]
+                restaurant = event["restaurant"]
                 food_details = event["food"]
                 print(
-                    f"[EVENT] Robot {robot_id} picked up food from restaurant {restaurant_xy}. Food: {food_details}")
+                    f"[EVENT] Order number {order_number} picked from restaurant {restaurant}. Food: {food_details}")
 
             elif event_id == EventType.FOOD_READY.value:
+                messages_to_send.append(
+                    event
+                )
                 restaurant = event["restaurant"]
                 order_number = event["order_number"]
                 food_details = event["food"]
@@ -383,10 +380,14 @@ class EventQueue:
                 print(f"[EVENT] Robot {robot_id}'s backpack has been emptied.")
 
             elif event_id == EventType.FOOD_START.value:
-                # TODO
                 restaurant = event["restaurant"]
                 food_details = event["food"]
                 order_number = event["order_number"]
+
+                for restaurant_obj in restaurants:
+                    if restaurant == restaurant_obj.restaurant:
+                        restaurant_obj.start_preparing_order(food_details, order_number)
+
                 print(
                     f"[EVENT] Restaurant {restaurant} preparing food. Food: {food_details}, {order_number}")
 
@@ -425,7 +426,7 @@ def main():
         restaurants.append(Restaurant(x_, y_, event_queue))
 
     # 4. Communication
-    communication = Communication("localhost", 12345)
+    communication = Communication("localhost", int(sys.argv[1]))
 
     # 5. Lista robotów i zmienna do przydzielania ID
     robots = []
@@ -433,6 +434,7 @@ def main():
     order_number = 0
 
     running = True
+    order_spawned_flag = False
 
     while running:
         # Obsługa zdarzeń Pygame (np. zamknięcie okna)
@@ -441,7 +443,9 @@ def main():
                 running = False
 
         # Generowanie losowych zamówień
-        if random.random() < 0.15:  # 5% szansa na tick
+        # if random.random() < 0.15:  # 5% szansa na tick
+        if not order_spawned_flag:
+            order_spawned_flag = True
             address_x = random.randint(0, city_size[0] - 1)
             address_y = random.randint(0, city_size[1] - 1)
 
@@ -464,7 +468,7 @@ def main():
         # Ruch robotów
         for r in robots[:]:
             r: Robot
-            print(f"pos: {r.x}, {r.y}, target: {r.target_x}, {r.target_y}")
+            # print(f"pos: {r.x}, {r.y}, target: {r.target_x}, {r.target_y}")
             if r.battery_range > 0:
                 r.move()
             else:
@@ -477,7 +481,7 @@ def main():
 
         # Przetwarzanie zdarzeń
         next_robot_id = event_queue.process_events(
-            robots, max_robots, backpack_capacity, next_robot_id, communication, road_spacing)
+            robots, restaurants, max_robots, backpack_capacity, next_robot_id, communication, road_spacing)
 
         # Renderowanie
         renderer.update(robots)
