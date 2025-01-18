@@ -1,10 +1,13 @@
-import pygame
 import json
 import os
-from enum import Enum
+import random
 from collections import deque
-from render import Renderer
+from enum import Enum
+
+import pygame
+
 from communication import Communication
+from render import Renderer
 
 
 class Objective(Enum):
@@ -358,6 +361,7 @@ def main():
     # 5. Lista robotów i zmienna do przydzielania ID
     robots = []
     next_robot_id = 1
+    order_number = 0
 
     running = True
 
@@ -379,25 +383,27 @@ def main():
         #     robots.append(r)
         #     print(f"[SIM] Spawn nowego robota o ID={next_robot_id}")
         #     next_robot_id += 1
-        #
-        # # Generowanie losowych zamówień
-        # if random.random() < 0.1:  # 10% szansa na tick
-        #     address_x = random.randint(0, city_size[0] - 1)
-        #     address_y = random.randint(0, city_size[1] - 1)
-        #
-        #     # Dostosuj adres do drogi
-        #     address_x, address_y = adjust_to_road(address_x, address_y, road_spacing)
-        #
-        #     rest_x, rest_y = random.choice(restaurants)
-        #     rest_x, rest_y = adjust_to_road(rest_x, rest_y, road_spacing)
-        #
-        #     food = {"size": random.randint(1, 3)}
-        #     event_queue.enqueue({
-        #         "id": EventType.NEW_ORDER,
-        #         "address": [address_x, address_y],
-        #         "restaurant": [rest_x, rest_y],
-        #         "food": food
-        #     })
+
+        # Generowanie losowych zamówień
+        if random.random() < 0.05:  # 10% szansa na tick
+            address_x = random.randint(0, city_size[0] - 1)
+            address_y = random.randint(0, city_size[1] - 1)
+
+            # Dostosuj adres do drogi
+            address_x, address_y = adjust_to_road(address_x, address_y, road_spacing)
+
+            rest_x, rest_y = random.choice(restaurants)
+            rest_x, rest_y = adjust_to_road(rest_x, rest_y, road_spacing)
+
+            food = {"size": random.randint(1, 3)}
+            event_queue.enqueue({
+                "id": EventType.NEW_ORDER,
+                "order_number": order_number,
+                "food": food,
+                "address": [address_x, address_y],
+                "restaurant": [rest_x, rest_y],
+            })
+            order_number += 1
 
         # Ruch robotów
         for r in robots[:]:
