@@ -495,7 +495,7 @@ def main():
             robots, restaurants, max_robots, backpack_capacity, next_robot_id, communication, road_spacing)
 
         # Statystyki
-        print('Total orders: {:4}\t | Realized orders: {:4}\t | Percentage: {:5.2}%'.format(number_of_generated_orders, finished_orders, float(finished_orders/number_of_generated_orders)))
+        print('Total orders: {:4} | Realized orders: {:4} | Percentage: {:5.2f}%'.format(number_of_generated_orders, finished_orders, 100.0 * float(finished_orders)/number_of_generated_orders), end='\r')
 
         # Renderowanie
         renderer.update(robots)
