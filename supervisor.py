@@ -291,13 +291,14 @@ class Supervisor:
         max_robots = config["max_robots"]
 
         self.communication = Communication(host, port)
+        self.to_send = []
         self.robots = [Robot(self) for _ in range(max_robots)]
         self.orders = []
 
     def transmit(self, controllable_event):
         #print(f'tx {controllable_event}')
 
-        self.communication.send_dict([controllable_event])
+        self.to_send.append(controllable_event)
 
         if controllable_event['id']=='robot_spawn':
             robots_in_the_base = [robot for robot in self.robots if robot.sm.current_state.name=='Wait in base']
@@ -306,6 +307,12 @@ class Supervisor:
             robot.send('robot_spawn')
         else:
             self.receive(controllable_event)
+
+    def flush(self):
+        if len(self.to_send)>0:
+            print(self.to_send)
+            self.communication.send_dict(self.to_send)
+            self.to_send = []
 
     def receive(self, event):
         if event['id']=='new_order':
@@ -333,6 +340,8 @@ if __name__ == "__main__":
                 #print(f'rx {received_data}')
                 for msg in received_data:
                     supervisor.receive(msg)
+            supervisor.flush()
+            time.sleep(0.5)
     except KeyboardInterrupt:
         print("Shutting down Supervisor.")
     finally:
