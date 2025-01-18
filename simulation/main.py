@@ -25,6 +25,7 @@ DEBUG: bool = False
 class EventType(Enum):
     NEW_ORDER = "new_order"
     SPAWN_COURIER = "robot_spawn"
+    ID_OF_SPAWNED_ROBOT = "id_of_spawned_robot"
     RETURN_TO_BASE = "robot_return"
     ARRIVED_AT_BASE = "robot_returned"
     LOW_BATTERY_WARNING = "battery_low"
@@ -46,7 +47,7 @@ class Robot:
         self.y = y
         # zasięg na baterii (np. liczba "kroków")
         self.battery_range = battery_range
-        self.current_baterry_range = battery_range
+        self.current_battery_range = battery_range
         self.backpack_capacity = backpack_capacity
         self.current_capacity = 0
         self.target_x = None
@@ -130,14 +131,6 @@ class Robot:
         if delivery_to_remove_from_dict >= 0:
             del self.deliveries[delivery_to_remove_from_dict]
 
-    def adjust_to_road(self, x, y, road_spacing):
-        """
-        Dostosowuje współrzędne (x, y) do najbliższej kratki drogi.
-        """
-        x = round(x / road_spacing) * road_spacing
-        y = round(y / road_spacing) * road_spacing
-        return x, y
-
     def move(self):
         """
         Simple "taxi-like" movement (Manhattan distance):
@@ -161,13 +154,13 @@ class Robot:
             #     self.x, self.y, self.road_spacing)
 
             # Każdy krok zużywa 1 "jednostkę" baterii
-            self.current_baterry_range -= 1
+            self.current_battery_range -= 1
 
             # Low battery warning
-            if self.current_baterry_range <= 0.1 * self.battery_range:
+            if self.current_battery_range <= 0.17 * self.battery_range:
                 self.event_queue.enqueue({
                     "id": EventType.LOW_BATTERY_WARNING.value,
-                    "robot_id": self.robot_id
+                    "robot_number": self.robot_id
                 })
 
             # Sprawdzamy, czy dotarliśmy do celu
@@ -182,9 +175,10 @@ class Robot:
                 elif self.current_objective == Objective.GOING_WITH_ORDER:
                     self.give_food([self.x, self.y])
                 elif self.target_x == 0 and self.target_y == 0 and self.current_objective == Objective.RETURNING_TO_BASE:
+                    self.current_battery_range = self.battery_range
                     self.event_queue.enqueue({
                         "id": EventType.ARRIVED_AT_BASE.value,
-                        "robot_id": self.robot_id,
+                        "robot_number": self.robot_id,
                     })
 
                 # Clear target
@@ -193,10 +187,10 @@ class Robot:
                 self.current_objective = Objective.IDLE
 
         # Battery depleted
-        if self.current_baterry_range <= 0:
+        if self.current_battery_range <= 0:
             self.event_queue.enqueue({
                 "id": EventType.BATTERY_DEPLETED.value,
-                "robot_id": self.robot_id
+                "robot_number": self.robot_id
             })
 
 
@@ -230,6 +224,7 @@ class EventQueue:
     def __init__(self):
         self.queue = deque()
         self.num_of_finished_orders = 0
+        self.recharged_robots = []
 
     def enqueue(self, event_dict: dict):
         self.queue.append(event_dict)
@@ -262,20 +257,37 @@ class EventQueue:
                     print(f"[EVENT] New order: {event}")
 
             elif event_id == EventType.SPAWN_COURIER.value:
-                if len(robots) < max_robots:
-                    r = Robot(next_robot_id, 0, 0, event.get(
-                        "battery_range", 100), backpack_capacity, self, road_spacing)
-                    robots.append(r)
-                    if DEBUG:
-                        print(f"[EVENT] Spawned new courier: ID={next_robot_id}")
-                    next_robot_id += 1
+                id_of_spawned_robot = -1
+                if self.recharged_robots:
+                    robot_id = self.recharged_robots.pop()
+                    for r in robots:
+                        if r.robot_id == robot_id:
+                            id_of_spawned_robot = robot_id
+                            if DEBUG:
+                                print(f"[EVENT] Spawning recharged robot with id: {robot_id}")
                 else:
-                    if DEBUG:
-                        print("[EVENT] Maximum number of robots reached.")
-                    # TODO: raise it to the supervisor
+                    if len(robots) < max_robots:
+                        r = Robot(next_robot_id, 0, 0, event.get(
+                            "battery_range", 100), backpack_capacity, self, road_spacing)
+                        robots.append(r)
+                        id_of_spawned_robot = next_robot_id
+                        if DEBUG:
+                            print(f"[EVENT] Spawned new courier: ID={next_robot_id}")
+                        next_robot_id += 1
+                    else:
+                        if DEBUG:
+                            print("[EVENT] Maximum number of robots reached.")
+                        # TODO: raise it to the supervisor
+
+                messages_to_send.append(
+                    {
+                        "id": EventType.ID_OF_SPAWNED_ROBOT.value,
+                        "robot_number": id_of_spawned_robot,
+                    }
+                )
 
             elif event_id == EventType.RETURN_TO_BASE.value:
-                robot_id = event["robot_id"]
+                robot_id = event["robot_number"]
                 for r in robots:
                     if r.robot_id == robot_id:
                         r.set_target(0, 0, Objective.RETURNING_TO_BASE)
@@ -287,7 +299,7 @@ class EventQueue:
                 messages_to_send.append(
                     event
                 )
-                robot_id = event["robot_id"]
+                robot_id = event["robot_number"]
                 if DEBUG:
                     print(f"[EVENT] Robot {robot_id} arrived at base.")
 
@@ -296,13 +308,13 @@ class EventQueue:
                 messages_to_send.append(
                     event
                 )
-                robot_id = event["robot_id"]
+                robot_id = event["robot_number"]
                 if DEBUG:
                     print(f"[EVENT] Warning: Robot {robot_id} has low battery.")
 
             elif event_id == EventType.BATTERY_DEPLETED.value:
                 # NOTE Szpak: Supervisor currently does not use this event
-                robot_id = event["robot_id"]
+                robot_id = event["robot_number"]
                 messages_to_send.append(
                     event
                 )
@@ -465,6 +477,16 @@ def main():
             address_x = random.randint(0, city_size[0] - 1)
             address_y = random.randint(0, city_size[1] - 1)
 
+            if address_x == 0:
+                address_x = 1
+            elif (address_x) % 3 == 0:
+                address_x -= 1
+
+            if address_y == 0:
+                address_y = 1
+            elif (address_y) % 3 == 0:
+                address_y -= 1
+
             rest_x, rest_y = random.choice(restaurants_positions)
 
             food = {"size": random.randint(1, 3)}
@@ -495,7 +517,7 @@ def main():
             robots, restaurants, max_robots, backpack_capacity, next_robot_id, communication, road_spacing)
 
         # Statystyki
-        print('Total orders: {:4} | Realized orders: {:4} | Percentage: {:5.2f}%'.format(number_of_generated_orders, finished_orders, 100.0 * float(finished_orders)/number_of_generated_orders), end='\r')
+        print('Total orders: {:4} | Realized orders: {:4} | Percentage: {:5.2f}%'.format(number_of_generated_orders, finished_orders, 100.0 * float(finished_orders)/number_of_generated_orders if number_of_generated_orders != 0 else 0.0), end='\r')
 
         # Renderowanie
         renderer.update(robots)

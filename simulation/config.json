@@ -1,10 +1,10 @@
 {
-    "max_robots": 20,
+    "max_robots": 200,
     "backpack_capacity": 5,
     "restaurant_count": 5,
     "city_size": [
-        23,
-        23
+        22,
+        22
     ],
     "cell_size": 30
 }
