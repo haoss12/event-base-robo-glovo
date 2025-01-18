@@ -173,6 +173,12 @@ class Order:
             case 'food_picked':
                 if event['order_number']==self.id:
                     self.send(event['id'])
+                    self.supervisor.transmit({
+                        'id': 'robot_deliver',
+                        'robot_number': self.robot.id,
+                        'food': self.food,
+                        'address': self.address,
+                    })
 
         match self.sm.current_state.name:
             case 'Initial':
