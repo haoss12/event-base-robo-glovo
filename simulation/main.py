@@ -270,6 +270,25 @@ def load_events_from_file(events_file):
         return []
     
 
+def is_on_road(x, y, road_spacing):
+    """
+    Sprawdza, czy dana pozycja (x, y) znajduje się na drodze.
+    Drogi są zdefiniowane jako kratki, gdzie x % road_spacing == 0 lub y % road_spacing == 0.
+    """
+    return x % road_spacing == 0 or y % road_spacing == 0
+
+
+def adjust_to_road(x, y, road_spacing):
+    """
+    Dostosowuje współrzędne (x, y) do najbliższej kratki drogi.
+    """
+    if x % road_spacing != 0:
+        x = round(x / road_spacing) * road_spacing
+    if y % road_spacing != 0:
+        y = round(y / road_spacing) * road_spacing
+    return x, y
+
+
 def main():
     # 1. Wczytanie konfiguracji
     with open("config.json", 'r', encoding='utf-8') as f:
@@ -280,6 +299,7 @@ def main():
     cell_size = config["cell_size"]    # in px
     backpack_capacity = config["backpack_capacity"]
     restaurant_count = config["restaurant_count"]  # liczba restauracji
+    road_spacing = 3  # Rozstaw dróg (stały)
 
     # 2. Inicjalizacja Pygame
     clock = pygame.time.Clock()
@@ -289,56 +309,62 @@ def main():
     # 3. Renderer
     renderer = Renderer(city_size, cell_size, restaurant_count)
     restaurants = renderer.get_restaurants()
-    print(restaurants)
+
     # 4. Lista robotów i zmienna do przydzielania ID
     robots = []
     next_robot_id = 1
 
     running = True
 
-    # NOTE Szpak: it should a list of events to send, each event is a dict
-    events_to_send: List[dict] = []
-    # communication_class = communication.Communication("localhost", 12345)
-
     while running:
-        # received_events: List[dict] = communication_class.run(events_to_send)
-
         # Obsługa zdarzeń Pygame (np. zamknięcie okna)
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
+        # Dodanie nowego robota, jeśli jest miejsce
         if len(robots) < max_robots:
-            r = Robot(next_robot_id, 0, 0,
-                      30, backpack_capacity, event_queue)
-            r.set_target(5, 5, Objective.PICKING_UP)
+            r = Robot(next_robot_id, 0, 0, 30, backpack_capacity, event_queue)
+            
+            # Wybierz losową restaurację i dostosuj ją do drogi
+            rest_x, rest_y = random.choice(restaurants)
+            rest_x, rest_y = adjust_to_road(rest_x, rest_y, road_spacing)
+            
+            r.set_target(rest_x, rest_y, Objective.PICKING_UP)
             robots.append(r)
-            print(
-                f"[SIM] Spawn nowego robota o ID={next_robot_id}")
+            print(f"[SIM] Spawn nowego robota o ID={next_robot_id}")
             next_robot_id += 1
 
-        # Randomly generate new orders
-        if random.random() < 0.1:  # 10% chance per tick
-            address_xy = [random.randint(
-                0, city_size[0] - 1), random.randint(0, city_size[1] - 1)]
-            rest_xy = random.choice(restaurants)
+        # Generowanie losowych zamówień
+        if random.random() < 0.1:  # 10% szansa na tick
+            address_x = random.randint(0, city_size[0] - 1)
+            address_y = random.randint(0, city_size[1] - 1)
+
+            # Dostosuj adres do drogi
+            address_x, address_y = adjust_to_road(address_x, address_y, road_spacing)
+
+            rest_x, rest_y = random.choice(restaurants)
+            rest_x, rest_y = adjust_to_road(rest_x, rest_y, road_spacing)
+
             food = {"size": random.randint(1, 3)}
             event_queue.enqueue(EventType.NEW_ORDER, {
-                                "address": address_xy, "restaurant": rest_xy, "food": food})
+                "address": (address_x, address_y),
+                "restaurant": (rest_x, rest_y),
+                "food": food
+            })
 
         # Ruch robotów
-        for r in robots[:]:  # [:] – aby iterować po kopii listy, bo możemy usuwać
+        for r in robots[:]:
             if r.battery_range > 0:
                 r.move()
             else:
-                print(
-                    f"[SIM] Robot {r.robot_id} ma rozładowaną baterię i zostaje usunięty z symulacji.")
+                print(f"[SIM] Robot {r.robot_id} ma rozładowaną baterię i zostaje usunięty z symulacji.")
                 robots.remove(r)
 
-        # Process events
-        next_robot_id = event_queue.process_events(
-            robots, max_robots, backpack_capacity, next_robot_id)
-        
+        # Przetwarzanie zdarzeń
+        next_robot_id = event_queue.process_events(robots, max_robots, backpack_capacity, next_robot_id)
+
+        # Renderowanie
         renderer.update(robots)
         clock.tick(2)  # 2 FPS – można zmienić w zależności od potrzeb
 
