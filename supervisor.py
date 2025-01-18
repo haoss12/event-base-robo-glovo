@@ -163,6 +163,7 @@ class Order:
                     self.send(event['id'])
 
                 if self.robot.sm.current_state.name=='Wait in restaurant':
+                    print("----------------- Potezny DUPA PRINT ----------------")
                     self.supervisor.transmit({
                         'id': 'robot_deliver',
                         'robot_number': self.robot.id,
@@ -339,7 +340,7 @@ if __name__ == "__main__":
         while True:
             received_data = supervisor.communication.receive_dict()
             if received_data:
-                #print(f'rx {received_data}')
+                print(f'rx {received_data}')
                 for msg in received_data:
                     supervisor.receive(msg)
             supervisor.flush()

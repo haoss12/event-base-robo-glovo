@@ -51,7 +51,6 @@ class Robot:
         self.target_x = None
         self.target_y = None
         self.current_objective = Objective.IDLE
-        self.carrying_food = dict()  # Tu można trzymać informacje o jedzeniu
         self.event_queue: EventQueue = event_queue  # Reference to the event queue
         self.orders = {}
         self.deliveries = {}
@@ -74,6 +73,7 @@ class Robot:
 
     def pickup_food(self, restaurant):
         """Add food to backpack, simulating pickup of an order from restaurant"""
+        order_to_remove_from_dict = -1
         for order_number, order_param in self.orders.items():
             restaurant_location = order_param["restaurant"]
             if restaurant_location != restaurant:
@@ -85,7 +85,6 @@ class Robot:
                     raise Exception(
                         f"Supervisor exceeded max capacity for robot #{self.robot_id}")
                 self.current_capacity += food_capacity
-                self.carrying_food[order_number] = order_param["food"]
                 self.event_queue.enqueue({
                     "id": EventType.FOOD_PICKED_UP.value,
                     "order_number": order_number,
@@ -94,34 +93,41 @@ class Robot:
                 })
                 self.current_objective = Objective.IDLE
                 self.restaurant_at_which_robot_waits = []
+                order_to_remove_from_dict = order_number
 
             else:
                 self.current_objective = Objective.WAITING_FOR_FOOD_TO_BE_READY
                 self.restaurant_at_which_robot_waits = restaurant
+        if order_to_remove_from_dict >= 0:
+            del self.orders[order_to_remove_from_dict]
 
-    def give_food(self, address, food_id):
+    def give_food(self, address):
         """Remove food from backpack, simulating giving order to customer"""
-        removed_capacity = self.carrying_food[food_id]
-        self.current_capacity -= removed_capacity
-        del self.carrying_food[food_id]
+        delivery_to_remove_from_dict = -1
+        for order_number, delivery_parameters in self.deliveries.items():
+            destination = delivery_parameters["address"]
+            if destination != address:
+                continue
 
-        self.event_queue.enqueue({
-            "id": EventType.FOOD_DELIVERED.value,
-            "order_number": self.order_number,
-            "address": [self.target_x, self.target_y],
-        })
-        self.event_queue.enqueue({
-            "id": EventType.FOOD_DELIVERED.value,
-            "order_number": 1,
-            "address_xy": [self.target_x, self.target_y],
-        })
+            removed_capacity = self.deliveries["food"]["size"]
+            self.current_capacity -= removed_capacity
+            delivery_to_remove_from_dict = order_number
 
-        # Generate event: Backpack emptied
-        if self.current_capacity == 0:
             self.event_queue.enqueue({
-                "id": EventType.BACKPACK_EMPTIED.value,
-                "robot_number": self.robot_id
+                "id": EventType.FOOD_DELIVERED.value,
+                "order_number": order_number,
+                "address": address,
             })
+
+            # Generate event: Backpack emptied
+            if self.current_capacity == 0:
+                self.event_queue.enqueue({
+                    "id": EventType.BACKPACK_EMPTIED.value,
+                    "robot_number": self.robot_id
+                })
+
+        if delivery_to_remove_from_dict >= 0:
+            del self.deliveries[delivery_to_remove_from_dict]
 
     # def adjust_to_road(self, x, y, road_spacing):
     #     """
@@ -173,7 +179,7 @@ class Robot:
                         "restaurant": [self.target_x, self.target_y],
                     })
                 elif self.current_objective == Objective.GOING_WITH_ORDER:
-                    self.give_food()
+                    self.give_food([self.x, self.y])
                 elif self.target_x == 0 and self.target_y == 0 and self.current_objective == Objective.RETURNING_TO_BASE:
                     self.event_queue.enqueue({
                         "id": EventType.ARRIVED_AT_BASE.value,
@@ -218,8 +224,6 @@ class Restaurant:
                     "restaurant": self.restaurant,
                     "food": order_details[0],
                 })
-
-
 
 class EventQueue:
     def __init__(self):
