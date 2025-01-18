@@ -23,6 +23,7 @@ class Communication:
         try:
             data = self.client_socket.recv(1024).decode("utf-8")
             if data:
+                print(data)
                 return json.loads(data)
             return {}
         except BlockingIOError:
