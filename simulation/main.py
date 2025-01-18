@@ -8,7 +8,7 @@ import random
 from typing import List
 from enum import Enum
 from collections import deque
-
+from render import Renderer
 
 class Objective(Enum):
     IDLE = 0
@@ -255,10 +255,7 @@ class EventQueue:
                     f"[EVENT] Unknown event type: {event_type}. Params: {params}")
 
         return next_robot_id
-
-# -------------------------------
-# Funkcja do wczytywania zdarzeń z events.json
-# -------------------------------
+    
 
 
 def load_events_from_file(events_file):
@@ -271,11 +268,8 @@ def load_events_from_file(events_file):
             return data
     except:
         return []
+    
 
-
-# -------------------------------
-# Główna pętla symulacji
-# -------------------------------
 def main():
     # 1. Wczytanie konfiguracji
     with open("config.json", 'r', encoding='utf-8') as f:
@@ -283,36 +277,19 @@ def main():
 
     city_size = config["city_size"]  # [width, height], np. [10, 10]
     max_robots = config["max_robots"]  # maks. liczba robotów
+    cell_size = config["cell_size"]    # in px
     backpack_capacity = config["backpack_capacity"]
     restaurant_count = config["restaurant_count"]  # liczba restauracji
 
     # 2. Inicjalizacja Pygame
-    pygame.init()
-    cell_size = 40  # rozmiar jednej komórki w pikselach
-    screen = pygame.display.set_mode(
-        (city_size[0] * cell_size, city_size[1] * cell_size))
-    pygame.display.set_caption("Symulacja dostaw robotów")
-
     clock = pygame.time.Clock()
 
     event_queue = EventQueue()
 
-    # 3. Generujemy pozycje restauracji – losowe, ale stałe przez całą symulację.
-    #    Moglibyśmy przechowywać je w pliku konfig., ale tu, dla demonstracji, losujemy:
-    restaurants = []
-    occupied_positions = set()
-    # Upewniamy się, że baza (0,0) nie jest zajęta przez restaurację
-    occupied_positions.add((0, 0))
-
-    for _ in range(restaurant_count):
-        while True:
-            rx = random.randint(0, city_size[0] - 1)
-            ry = random.randint(0, city_size[1] - 1)
-            if (rx, ry) not in occupied_positions:
-                restaurants.append((rx, ry))
-                occupied_positions.add((rx, ry))
-                break
-
+    # 3. Renderer
+    renderer = Renderer(city_size, cell_size, restaurant_count)
+    restaurants = renderer.get_restaurants()
+    print(restaurants)
     # 4. Lista robotów i zmienna do przydzielania ID
     robots = []
     next_robot_id = 1
@@ -361,36 +338,8 @@ def main():
         # Process events
         next_robot_id = event_queue.process_events(
             robots, max_robots, backpack_capacity, next_robot_id)
-
-        # Renderowanie w oknie Pygame
-        screen.fill((255, 255, 255))
-
-        # Rysowanie siatki
-        for i in range(city_size[0]):
-            for j in range(city_size[1]):
-                rect = pygame.Rect(i * cell_size, j *
-                                   cell_size, cell_size, cell_size)
-                pygame.draw.rect(screen, (200, 200, 200), rect, 1)
-
-        # Rysowanie bazy (0,0) – np. czerwone kółko
-        base_center = (0 * cell_size + cell_size // 2,
-                       0 * cell_size + cell_size // 2)
-        pygame.draw.circle(screen, (255, 0, 0), base_center, cell_size // 3)
-
-        # Rysowanie restauracji – np. zielone kwadraty
-        for (rx, ry) in restaurants:
-            rest_rect = pygame.Rect(
-                rx * cell_size + 5, ry * cell_size + 5, cell_size - 10, cell_size - 10)
-            pygame.draw.rect(screen, (0, 200, 0), rest_rect)
-
-        # Rysowanie robotów (kurierów) – np. niebieskie kwadraty
-        for r in robots:
-            robot_rect = pygame.Rect(
-                r.x * cell_size + 10, r.y * cell_size + 10, cell_size - 20, cell_size - 20)
-            pygame.draw.rect(screen, (0, 128, 255), robot_rect)
-            # Można też dorysować ID robota, używając np. pygame.font (jeśli potrzeba)
-
-        pygame.display.flip()
+        
+        renderer.update(robots)
         clock.tick(2)  # 2 FPS – można zmienić w zależności od potrzeb
 
     pygame.quit()
