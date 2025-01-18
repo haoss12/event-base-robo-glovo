@@ -129,13 +129,13 @@ class Robot:
         if delivery_to_remove_from_dict >= 0:
             del self.deliveries[delivery_to_remove_from_dict]
 
-    # def adjust_to_road(self, x, y, road_spacing):
-    #     """
-    #     Dostosowuje współrzędne (x, y) do najbliższej kratki drogi.
-    #     """
-    #     x = round(x / road_spacing) * road_spacing
-    #     y = round(y / road_spacing) * road_spacing
-    #     return x, y
+    def adjust_to_road(self, x, y, road_spacing):
+        """
+        Dostosowuje współrzędne (x, y) do najbliższej kratki drogi.
+        """
+        x = round(x / road_spacing) * road_spacing
+        y = round(y / road_spacing) * road_spacing
+        return x, y
 
     def move(self):
         """
@@ -448,17 +448,13 @@ def main():
                 running = False
 
         # Generowanie losowych zamówień
-        # if random.random() < 0.15:  # 5% szansa na tick
-        if not order_spawned_flag:
-            order_spawned_flag = True
+        if random.random() < 0.15:  # 5% szansa na tick
+        # if not order_spawned_flag:
+        #     order_spawned_flag = True
             address_x = random.randint(0, city_size[0] - 1)
             address_y = random.randint(0, city_size[1] - 1)
 
-            # Dostosuj adres do drogi
-            # address_x, address_y = adjust_to_road(address_x, address_y, road_spacing)
-
             rest_x, rest_y = random.choice(restaurants_positions)
-            # rest_x, rest_y = adjust_to_road(rest_x, rest_y, road_spacing)
 
             food = {"size": random.randint(1, 3)}
             event_queue.enqueue({

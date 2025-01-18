@@ -82,7 +82,12 @@ class Robot:
                     case 'battery_low':
                         self.battery_low = True
                     case 'robot_arrived':
-                        orders = [order for order in self.supervisor.orders if order.robot.id==self.id]
+                        # orders = [order for order in self.supervisor.orders if order.robot.id==self.id]
+                        orders = []
+                        for order in self.supervisor.orders:
+                            if order.robot:
+                                if order.robot.id == self.id:
+                                    orders.append(order)
 
                         #TODO consider all orders for this robot
                         order = orders[0]
@@ -111,7 +116,13 @@ class Robot:
         else:
             match event['id']:
                 case 'food_delivered':
-                    orders = [order for order in self.supervisor.orders if order.robot.id==self.id]
+                    orders = []
+                    for order in self.supervisor.orders:
+                        if order.robot:
+                            if order.robot.id == self.id:
+                                orders.append(order)
+
+                    # orders = [order for order in self.supervisor.orders if order.robot.id==self.id]
 
                     if(len(orders)>0):
                         self.send('food_delivered')
@@ -139,6 +150,7 @@ class Order:
         self.food = food
         self.restaurant = restaurant
         self.address = address
+        self.robot = None
 
     def send(self, event):
         try:
