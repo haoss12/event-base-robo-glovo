@@ -171,14 +171,89 @@ class Order:
     def is_finished(self):
         return self.sm.current_state.name=='Finished'
 
+class Communication:
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.socket.setblocking(0)
+        self.connected = False
+        self.attempt_connection()
+
+    def attempt_connection(self):
+        attempt_count = 0
+        while not self.connected:
+            try:
+                self.socket.connect((self.host, self.port))
+                self.connected = True
+                print("Connected to Simulation.")
+            except socket.error as e:
+                if e.errno == socket.errno.EINPROGRESS or e.errno == socket.errno.EALREADY:
+                    print("Non-blocking connect in progress...")
+                    if self.complete_connection():
+                        break
+                elif e.errno == socket.errno.EISCONN:
+                    self.connected = True
+                    print("Already connected to Simulation.")
+                    break
+                elif e.errno == socket.errno.ECONNREFUSED:
+                    attempt_count += 1
+                    print(f"Connection refused, attempt {attempt_count}. Retrying in 3 seconds...")
+                    time.sleep(3)
+                else:
+                    print(f"Unexpected error during connection: {e}")
+                    sys.exit(1)
+
+    def complete_connection(self):
+        ready_to_write, _, _ = select.select([], [self.socket], [], 5)
+        if ready_to_write:
+            try:
+                self.socket.getpeername()  # An exception will be raised if the socket is not actually connected
+                print("Connection successfully established.")
+                return True
+            except socket.error as e:
+                print(f"Failed to establish connection: {e}")
+                return False
+        return False
+
+    def send_dict(self, data_):
+        if not self.connected:
+            print("No connection available to send data.")
+            return
+        try:
+            data_to_send = json.dumps(data_)
+            self.socket.sendall(data_to_send.encode('utf-8'))
+        except (TypeError, ValueError, socket.error) as e:
+            print("Error sending data:", str(e))
+
+    def receive_dict(self):
+        try:
+            ready_to_read, _, _ = select.select([self.socket], [], [], 0.1)
+            if ready_to_read:
+                data = self.socket.recv(1024).decode('utf-8')
+                if data:
+                    return json.loads(data)
+            return {}
+        except (BlockingIOError, socket.timeout):
+            return {}
+        except (json.JSONDecodeError, socket.error) as e:
+            print("Error receiving data:", e)
+            return {}
+
+    def close(self):
+        self.socket.close()
+
 class Supervisor:
     def __init__(self, host, port):
+        self.communication = Communication(host, port)
         self.robots = [Robot(self) for _ in range(3)]
         self.orders = []
 
     def transmit(self, controllable_event):
-        #TODO use Szpak's websocket implementation here
-        print(f'transmit {controllable_event}')
+        #print(f'tx {controllable_event}')
+
+        self.communication.send_dict([controllable_event])
 
         if controllable_event['id']=='robot_spawn':
             robots_in_the_base = [robot for robot in self.robots if robot.sm.current_state.name=='Wait in base']
@@ -205,6 +280,20 @@ class Supervisor:
 
         self.orders = [order for order in self.orders if not order.is_finished()]
 
+if __name__ == "__main__":
+    supervisor = Supervisor('localhost', 12345)
+    try:
+        while True:
+            received_data = supervisor.communication.receive_dict()
+            if received_data:
+                #print(f'rx {received_data}')
+                supervisor.receive(received_data)
+    except KeyboardInterrupt:
+        print("Shutting down Supervisor.")
+    finally:
+        supervisor.communication.close()
+
+'''
 supervisor = Supervisor('localhost', 12345)
 
 supervisor.receive({
@@ -245,3 +334,4 @@ supervisor.receive({
     'id': 'robot_empty',
     'robot_number': 0,
 })
+'''
