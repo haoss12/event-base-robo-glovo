@@ -24,12 +24,12 @@ class EventType(Enum):
     ARRIVED_AT_BASE = "arrived_at_base"
     LOW_BATTERY_WARNING = "low_battery_warning"
     BATTERY_DEPLETED = "battery_depleted"
-    ARRIVED_AT_RESTAURANT = "arrived_at_restaurant"
-    FOOD_PICKED_UP = "food_picked_up"
+    ARRIVED_AT_RESTAURANT = "robot_arrived"
+    FOOD_PICKED_UP = "food_picked"
     FOOD_READY = "food_ready"
     DELIVER_FOOD = "deliver_food"
     FOOD_DELIVERED = "food_delivered"
-    BACKPACK_EMPTIED = "backpack_emptied"
+    BACKPACK_EMPTIED = "backpack_empty"
     ORDER_FOOD_PREPARATION = "order_food_preparation"
 
 
@@ -63,10 +63,11 @@ class Robot:
         self.carrying_food[food_id] = food_capacity
 
         # Generate event: Food picked up
-        self.event_queue.enqueue(EventType.FOOD_PICKED_UP, {
-            "robot_id": self.robot_id,
-            "food_id": food_id,
-            "capacity": food_capacity
+        self.event_queue.enqueue({
+            "id": EventType.FOOD_PICKED_UP,
+            "order_number": "dupa",
+            "food": food_id,
+            "restaurant": [1, 2],
         })
 
     def give_food(self, food_id):
@@ -75,10 +76,18 @@ class Robot:
         self.current_capacity -= removed_capacity
         del self.carrying_food[food_id]
 
+        self.event_queue.enqueue({
+            "id": EventType.BACKPACK_EMPTIED,
+            "order_number": "dupa",
+            "address": [4, 5],
+        })
+
         # Generate event: Backpack emptied
         if self.current_capacity == 0:
-            self.event_queue.enqueue(EventType.BACKPACK_EMPTIED, {
-                                     "robot_id": self.robot_id})
+            self.event_queue.enqueue({
+                "id": EventType.BACKPACK_EMPTIED,
+                "robot_number": self.robot_id
+            })
 
     def move(self):
         """
@@ -101,26 +110,31 @@ class Robot:
 
             # Low battery warning
             if self.current_baterry_range <= 0.1 * self.battery_range:
-                self.event_queue.enqueue(EventType.LOW_BATTERY_WARNING, {
-                                         "robot_id": self.robot_id})
+                self.event_queue.enqueue({
+                    "id": EventType.LOW_BATTERY_WARNING,
+                    "robot_id": self.robot_id
+                })
 
             # Sprawdzamy, czy dotarliśmy do celu
             if self.x == self.target_x and self.y == self.target_y:
                 # Generate event: Arrived at destination
                 if self.curent_objective == Objective.PICKING_UP:
-                    self.event_queue.enqueue(EventType.ARRIVED_AT_RESTAURANT, {
+                    self.event_queue.enqueue({
+                        "id": EventType.ARRIVED_AT_RESTAURANT,
                         "robot_id": self.robot_id,
-                        "restaurant_xy": (self.target_x, self.target_y)
+                        "restaurant_xy": [self.target_x, self.target_y]
                     })
                 elif self.curent_objective == Objective.GOING_WITH_ORDER:
-                    self.event_queue.enqueue(EventType.FOOD_DELIVERED, {
-                        "robot_id": self.robot_id,
-                        "address_xy": (self.target_x, self.target_y),
-                        "food": self.carrying_food
+                    self.event_queue.enqueue({
+                        "id": EventType.FOOD_DELIVERED,
+                        "order_number": 1,
+                        "address_xy": [self.target_x, self.target_y],
                     })
                 elif self.target_x == 0 and self.target_y == 0 and self.curent_objective == Objective.RETURNING_TO_BASE:
-                    self.event_queue.enqueue(EventType.ARRIVED_AT_BASE, {
-                                             "robot_id": self.robot_id})
+                    self.event_queue.enqueue({
+                        "id": EventType.ARRIVED_AT_BASE,
+                        "robot_id": self.robot_id,
+                    })
 
                 # Clear target
                 self.target_x = None
@@ -129,17 +143,19 @@ class Robot:
 
         # Battery depleted
         if self.current_baterry_range <= 0:
-            self.event_queue.enqueue(EventType.BATTERY_DEPLETED, {
-                                     "robot_id": self.robot_id})
+            self.event_queue.enqueue({
+                "id": EventType.BATTERY_DEPLETED,
+                "robot_id": self.robot_id
+            })
 
 
 class EventQueue:
     def __init__(self):
         self.queue = deque()
 
-    def enqueue(self, event_type, params=None):
-        self.queue.append({"type": event_type, "params": params})
-        print(f"Added new event of type: {event_type}")
+    def enqueue(self, event_dict: dict):
+        self.queue.append(event_dict)
+        print(f"Added new event of type: {event_dict}")
 
     def dequeue(self):
         return self.queue.popleft() if self.queue else None
